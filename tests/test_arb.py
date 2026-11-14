@@ -61,6 +61,12 @@ class TestScanner(unittest.TestCase):
         ]}
         self.assertEqual(find_opportunities([ev]), [])  # different lines -> no arb
 
+    def test_ignores_lay_markets(self):
+        ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [
+            book("ex", [{"name": "H", "price": 2.8}, {"name": "A", "price": 1.6}], "h2h_lay"),
+        ]}
+        self.assertEqual(find_opportunities([ev]), [])
+
     def test_skips_started_games(self):
         ev = {"home_team": "H", "away_team": "A", "commence_time": "2000-01-01T00:00:00Z", "bookmakers": [
             book("b1", [{"name": "H", "price": 3.0}, {"name": "A", "price": 3.0}]),

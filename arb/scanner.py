@@ -63,6 +63,8 @@ def find_opportunities(
                 continue
             for mkt in book.get("markets", []):
                 key_name = mkt["key"]
+                if key_name.endswith("_lay"):
+                    continue  # exchange lay prices are bets AGAINST an outcome, not backable odds
                 per_line: dict[float | None, int] = {}
                 for out in mkt.get("outcomes", []):
                     price = out.get("price")
