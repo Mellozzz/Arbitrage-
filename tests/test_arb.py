@@ -67,6 +67,25 @@ class TestScanner(unittest.TestCase):
         ]}
         self.assertEqual(find_opportunities([ev]), [])
 
+    def test_exchange_commission_kills_thin_arb(self):
+        # 2.66 / 1.62 is a 0.68% arb on raw prices, but not after 5% Betfair commission.
+        ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [
+            book("betfair_ex_au", [{"name": "H", "price": 1.55}, {"name": "A", "price": 2.66}]),
+            book("sportsbet", [{"name": "H", "price": 1.62}, {"name": "A", "price": 2.40}]),
+        ]}
+        self.assertEqual(find_opportunities([ev]), [])
+        self.assertEqual(len(find_opportunities([ev], commission={})), 1)
+
+    def test_exchange_net_odds_used_for_stakes(self):
+        ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [
+            book("smarkets", [{"name": "H", "price": 2.30}, {"name": "A", "price": 1.50}]),
+            book("b2", [{"name": "H", "price": 1.70}, {"name": "A", "price": 2.10}]),
+        ]}
+        [opp] = find_opportunities([ev])
+        leg = next(l for l in opp.legs if l.bookmaker == "Smarkets")
+        self.assertAlmostEqual(leg.odds, 1 + 1.30 * 0.98)
+        self.assertEqual(leg.quoted, 2.30)
+
     def test_skips_started_games(self):
         ev = {"home_team": "H", "away_team": "A", "commence_time": "2000-01-01T00:00:00Z", "bookmakers": [
             book("b1", [{"name": "H", "price": 3.0}, {"name": "A", "price": 3.0}]),

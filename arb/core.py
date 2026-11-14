@@ -31,8 +31,9 @@ def parse_odds(text: str) -> float:
 @dataclass
 class Leg:
     outcome: str
-    odds: float          # decimal odds
+    odds: float          # decimal odds actually paid (after any commission)
     bookmaker: str = ""
+    quoted: float | None = None  # price shown by the book, if different from `odds`
 
 
 @dataclass
@@ -53,6 +54,22 @@ class StakePlan:
     @property
     def roi(self) -> float:
         return self.min_profit / self.total_stake if self.total_stake else 0.0
+
+
+# Commission charged on net winnings by betting exchanges (The Odds API bookmaker keys).
+# Defaults are standard base rates; override with --commission if yours differ.
+DEFAULT_COMMISSION = {
+    "betfair_ex_uk": 0.05,
+    "betfair_ex_eu": 0.05,
+    "betfair_ex_au": 0.05,
+    "smarkets": 0.02,
+    "matchbook": 0.02,
+}
+
+
+def net_odds(odds: float, commission: float) -> float:
+    """Effective decimal odds after commission is taken from the winnings."""
+    return 1 + (odds - 1) * (1 - commission)
 
 
 def implied_total(odds: list[float]) -> float:

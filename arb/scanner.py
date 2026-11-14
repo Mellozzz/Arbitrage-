@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .core import Leg, implied_total, profit_margin
+from .core import DEFAULT_COMMISSION, Leg, implied_total, net_odds, profit_margin
 
 
 @dataclass
@@ -39,9 +39,15 @@ def find_opportunities(
     events: list[dict],
     min_margin: float = 0.0,
     exclude_books: set[str] | None = None,
+    commission: dict[str, float] | None = None,
 ) -> list[Opportunity]:
-    """events: The Odds API v4 /odds response format."""
+    """events: The Odds API v4 /odds response format.
+
+    commission: bookmaker key -> rate on winnings (defaults to DEFAULT_COMMISSION).
+    Exchange prices are compared net of commission, so only real profits show.
+    """
     exclude_books = exclude_books or set()
+    commission = DEFAULT_COMMISSION if commission is None else commission
     found: list[Opportunity] = []
     now = datetime.now(timezone.utc)
 
@@ -75,8 +81,11 @@ def find_opportunities(
                     per_line[line] = per_line.get(line, 0) + 1
                     slot = best.setdefault(k, {})
                     cur = slot.get(out["name"])
-                    if cur is None or price > cur.odds:
-                        slot[out["name"]] = Leg(out["name"], float(price), book.get("title", book["key"]))
+                    rate = commission.get(book["key"], 0.0)
+                    eff = net_odds(float(price), rate)
+                    if cur is None or eff > cur.odds:
+                        slot[out["name"]] = Leg(out["name"], eff, book.get("title", book["key"]),
+                                                quoted=float(price) if rate else None)
                 for line, n in per_line.items():
                     k = (key_name, line)
                     n_outcomes[k] = max(n_outcomes.get(k, 0), n)

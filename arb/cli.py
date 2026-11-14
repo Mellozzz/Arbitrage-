@@ -11,7 +11,7 @@ import json
 import sys
 import time
 
-from .core import Leg, calculate_stakes, implied_total, parse_odds, profit_margin
+from .core import DEFAULT_COMMISSION, Leg, calculate_stakes, implied_total, parse_odds, profit_margin
 from .odds_api import OddsAPIError, get_odds, list_sports
 from .scanner import find_opportunities
 
@@ -20,7 +20,8 @@ def print_plan(legs: list[Leg], stake: float, round_to: float) -> None:
     plan = calculate_stakes(legs, stake, round_to)
     for leg, s, p in zip(plan.legs, plan.stakes, plan.payouts):
         book = f" @ {leg.bookmaker}" if leg.bookmaker else ""
-        print(f"    {leg.outcome:<28} odds {leg.odds:>6.2f}{book:<22} stake {s:>9.2f}  -> returns {p:>9.2f}")
+        price = f"{leg.quoted:.2f} (net {leg.odds:.2f})" if leg.quoted else f"{leg.odds:.2f}"
+        print(f"    {leg.outcome:<28} odds {price:>16}{book:<22} stake {s:>9.2f}  -> returns {p:>9.2f}")
     print(f"    total staked {plan.total_stake:.2f} | guaranteed profit {plan.min_profit:+.2f} "
           f"({plan.roi:+.2%})" + (f" up to {plan.max_profit:+.2f}" if plan.max_profit - plan.min_profit > 0.01 else ""))
     if plan.min_profit <= 0:
@@ -40,8 +41,19 @@ def cmd_calc(args: argparse.Namespace) -> int:
     return 0
 
 
+def parse_commission(text: str) -> dict[str, float]:
+    """'betfair_ex_au=0.06,smarkets=0' -> defaults updated with these rates."""
+    rates = dict(DEFAULT_COMMISSION)
+    for item in filter(None, text.split(",")):
+        key, _, val = item.partition("=")
+        rate = float(val)
+        rates[key.strip()] = rate / 100 if rate >= 1 else rate  # accept 5 or 0.05
+    return rates
+
+
 def scan_once(args: argparse.Namespace) -> int:
     exclude = set(filter(None, args.exclude.split(",")))
+    commission = parse_commission(args.commission)
     total_found = 0
     for sport in args.sports.split(","):
         try:
@@ -49,7 +61,8 @@ def scan_once(args: argparse.Namespace) -> int:
         except OddsAPIError as e:
             print(f"[{sport}] error: {e}", file=sys.stderr)
             continue
-        opps = find_opportunities(events, min_margin=args.min_margin / 100, exclude_books=exclude)
+        opps = find_opportunities(events, min_margin=args.min_margin / 100, exclude_books=exclude,
+                                  commission=commission)
         print(f"[{sport}] {len(events)} events scanned, {len(opps)} arbs "
               f"(API quota remaining: {quota.get('remaining')})")
         for o in opps:
@@ -82,7 +95,8 @@ def cmd_file(args: argparse.Namespace) -> int:
     """Scan a saved Odds-API-format JSON file (offline / testing)."""
     with open(args.path) as f:
         events = json.load(f)
-    opps = find_opportunities(events, min_margin=args.min_margin / 100)
+    opps = find_opportunities(events, min_margin=args.min_margin / 100,
+                              commission=parse_commission(args.commission))
     for o in opps:
         line = f" {o.line:+g}" if o.line is not None else ""
         print(f"\n  {o.margin:+.2%}  {o.event} | {o.market}{line}")
@@ -99,6 +113,11 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--stake", type=float, default=100, help="total amount to spread across all legs")
         sp.add_argument("--round", type=float, default=0, help="round stakes to this increment, e.g. 1 or 5")
 
+    def commission_arg(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--commission", default="",
+                        help="override exchange commission, e.g. betfair_ex_au=6,smarkets=2 "
+                             "(defaults: Betfair 5%%, Smarkets/Matchbook 2%%)")
+
     c = sub.add_parser("calc", help="check odds you found yourself, e.g. 2.10 2.05 or +110 -105")
     c.add_argument("odds", nargs="+")
     common(c)
@@ -112,12 +131,14 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--exclude", default="", help="comma list of bookmaker keys to ignore")
     s.add_argument("--watch", type=int, default=0, help="rescan every N seconds (uses API quota!)")
     common(s)
+    commission_arg(s)
     s.set_defaults(func=cmd_scan)
 
     f = sub.add_parser("file", help="scan a saved JSON odds file")
     f.add_argument("path")
     f.add_argument("--min-margin", type=float, default=0.0)
     common(f)
+    commission_arg(f)
     f.set_defaults(func=cmd_file)
 
     sp = sub.add_parser("sports", help="list available sport keys")

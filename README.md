@@ -54,7 +54,9 @@ Arbitrage math is risk-free. **Executing it is not.** Things that actually go wr
    voided legs. Make sure both sides cover the exact same market (e.g. "including overtime" vs "regulation").
 5. **Palpable errors.** A price that looks too good (e.g. a 10%+ arb) is often a mistake the book will void,
    leaving your other leg unhedged. Treat big margins with suspicion.
-6. **Fees and exchange commission** (Betfair, etc.) cut into 1–3% margins.
+6. **Fees and exchange commission.** The scanner already prices exchanges net of commission
+   (Betfair 5%, Smarkets/Matchbook 2%) and shows e.g. `2.66 (net 2.58)`. If your rate differs, pass
+   `--commission betfair_ex_au=6,smarkets=0`. Exchange "lay" markets are ignored.
 7. **Legality.** Make sure online betting, and each bookmaker, is legal where you live.
 
 Realistic margins are **0.5–3%** per arb, so this grinds out small gains on capital spread across many accounts.
