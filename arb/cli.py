@@ -12,7 +12,8 @@ import sys
 import time
 
 from .core import DEFAULT_COMMISSION, Leg, calculate_stakes, implied_total, parse_odds, profit_margin
-from .odds_api import OddsAPIError, get_odds, list_sports
+from .odds_api import OddsAPIError, get_events, get_odds, list_sports
+from .planner import count_all, plan
 from .scanner import find_opportunities
 
 
@@ -51,19 +52,36 @@ def parse_commission(text: str) -> dict[str, float]:
     return rates
 
 
+def build_plan(args: argparse.Namespace) -> list[tuple[str, str]]:
+    """Return (sport, comma-markets) pairs to fetch."""
+    if not args.auto:
+        return [(sport, args.markets) for sport in args.sports.split(",")]
+    sports = [s["key"] for s in list_sports() if s.get("active") and not s.get("has_outrights")]
+    counts = count_all(sports, get_events, args.hours)
+    n_regions = len(args.regions.split(","))
+    chosen = plan(counts, args.budget, n_regions, args.markets.split(","))
+    busy = sum(1 for c in counts.values() if c)
+    cost = sum(p.cost(n_regions) for p in chosen)
+    print(f"Auto plan: {busy}/{len(sports)} sports have games in the next {args.hours:g}h; "
+          f"buying {cost} credits of odds (budget {args.budget}):")
+    for p in chosen:
+        print(f"  {p.sport:<45} {p.events:>3} games  {','.join(p.markets)}")
+    return [(p.sport, ",".join(p.markets)) for p in chosen]
+
+
 def scan_once(args: argparse.Namespace) -> int:
     exclude = set(filter(None, args.exclude.split(",")))
     commission = parse_commission(args.commission)
     total_found = 0
-    for sport in args.sports.split(","):
+    for sport, markets in build_plan(args):
         try:
-            events, quota = get_odds(sport, args.regions, args.markets)
+            events, quota = get_odds(sport, args.regions, markets)
         except OddsAPIError as e:
             print(f"[{sport}] error: {e}", file=sys.stderr)
             continue
         opps = find_opportunities(events, min_margin=args.min_margin / 100, exclude_books=exclude,
                                   commission=commission)
-        print(f"[{sport}] {len(events)} events scanned, {len(opps)} arbs "
+        print(f"[{sport} {markets}] {len(events)} events scanned, {len(opps)} arbs "
               f"(API quota remaining: {quota.get('remaining')})")
         for o in opps:
             total_found += 1
@@ -125,8 +143,12 @@ def main(argv: list[str] | None = None) -> int:
 
     s = sub.add_parser("scan", help="scan live bookmaker odds (needs ODDS_API_KEY)")
     s.add_argument("--sports", default="upcoming", help="comma list of sport keys (see `arb sports`)")
-    s.add_argument("--regions", default="us,uk,eu,au", help="bookmaker regions: us,us2,uk,eu,au")
+    s.add_argument("--regions", default="au", help="bookmaker regions: au,us,us2,uk,eu (each one multiplies cost)")
     s.add_argument("--markets", default="h2h", help="h2h,spreads,totals")
+    s.add_argument("--auto", action="store_true",
+                   help="pick the sports/markets with the most upcoming games, within --budget")
+    s.add_argument("--budget", type=int, default=15, help="max API credits to spend with --auto")
+    s.add_argument("--hours", type=float, default=48, help="with --auto, count games starting within N hours")
     s.add_argument("--min-margin", type=float, default=0.5, help="minimum profit %% to show")
     s.add_argument("--exclude", default="", help="comma list of bookmaker keys to ignore")
     s.add_argument("--watch", type=int, default=0, help="rescan every N seconds (uses API quota!)")

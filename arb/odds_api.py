@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import urllib.parse
 import urllib.request
 
@@ -13,7 +14,18 @@ class OddsAPIError(RuntimeError):
     pass
 
 
-def _get(path: str, params: dict) -> tuple[object, dict]:
+def _get(path: str, params: dict, retries: int = 3) -> tuple[object, dict]:
+    for attempt in range(retries):
+        try:
+            return _get_once(path, params)
+        except OddsAPIError as e:
+            if "HTTP 429" not in str(e) or attempt == retries - 1:
+                raise
+            time.sleep(1.5 * (attempt + 1))  # rate limited: back off and retry
+    raise AssertionError("unreachable")
+
+
+def _get_once(path: str, params: dict) -> tuple[object, dict]:
     url = f"{BASE}{path}?{urllib.parse.urlencode(params)}"
     headers = {"User-Agent": "arb-scanner/1.0", "x-api-key": api_key()}
     req = urllib.request.Request(url, headers=headers)
@@ -53,3 +65,9 @@ def get_odds(sport: str, regions: str, markets: str) -> tuple[list[dict], dict]:
         },
     )
     return data, quota  # type: ignore[return-value]
+
+
+def get_events(sport: str) -> list[dict]:
+    """Upcoming events for a sport. Free: does not use API quota."""
+    data, _ = _get(f"/sports/{sport}/events", {"dateFormat": "iso"})
+    return data  # type: ignore[return-value]

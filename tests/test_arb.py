@@ -1,6 +1,7 @@
 import unittest
 
 from arb.core import Leg, american_to_decimal, calculate_stakes, is_arbitrage, parse_odds, profit_margin
+from arb.planner import count_upcoming, plan
 from arb.scanner import find_opportunities
 
 FUTURE = "2099-01-01T00:00:00Z"
@@ -33,6 +34,12 @@ class TestCore(unittest.TestCase):
         plan = calculate_stakes([Leg("A", 2.20), Leg("B", 2.00)], 500, round_to=5)
         self.assertTrue(all(s % 5 == 0 for s in plan.stakes))
         self.assertGreater(plan.min_profit, 0)
+
+    def test_smart_rounding_keeps_profit(self):
+        # Nearest-dollar rounding gives 79/21 -> loss; smart rounding finds a profitable split.
+        plan = calculate_stakes([Leg("A", 1.28), Leg("B", 4.75)], 100, round_to=1)
+        self.assertGreater(plan.min_profit, 0)
+        self.assertTrue(all(float(s).is_integer() for s in plan.stakes))
 
 
 class TestScanner(unittest.TestCase):
@@ -91,6 +98,29 @@ class TestScanner(unittest.TestCase):
             book("b1", [{"name": "H", "price": 3.0}, {"name": "A", "price": 3.0}]),
         ]}
         self.assertEqual(find_opportunities([ev]), [])
+
+
+class TestPlanner(unittest.TestCase):
+    def test_budget_respected_and_busiest_first(self):
+        counts = {"nba": 10, "afl": 0, "epl": 6, "nbl": 2}
+        p = plan(counts, budget=4, n_regions=1, markets=["h2h", "totals"])
+        self.assertEqual(sum(x.cost(1) for x in p), 4)
+        self.assertNotIn("afl", [x.sport for x in p])
+        by = {x.sport: x.markets for x in p}
+        self.assertEqual(by["nba"], ["h2h", "totals"])   # 10, 6
+        self.assertEqual(by["epl"], ["h2h", "totals"])   # 6, 3.6 beat nbl's 2
+
+    def test_regions_multiply_cost(self):
+        p = plan({"nba": 5, "epl": 4}, budget=5, n_regions=2, markets=["h2h"])
+        self.assertEqual([x.sport for x in p], ["nba", "epl"])
+        self.assertEqual(sum(x.cost(2) for x in p), 4)
+
+    def test_count_upcoming_window(self):
+        from datetime import datetime, timezone
+        now = datetime(2030, 1, 1, tzinfo=timezone.utc)
+        evs = [{"commence_time": "2030-01-01T05:00:00Z"}, {"commence_time": "2030-01-05T00:00:00Z"},
+               {"commence_time": "2029-12-31T00:00:00Z"}]
+        self.assertEqual(count_upcoming(evs, 48, now), 1)
 
 
 if __name__ == "__main__":

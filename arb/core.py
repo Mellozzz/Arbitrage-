@@ -1,6 +1,7 @@
 """Pure arbitrage math: odds conversion, detection, and stake sizing."""
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 
@@ -96,10 +97,24 @@ def calculate_stakes(legs: list[Leg], total_stake: float, round_to: float = 0.0)
         raise ValueError("need at least two outcomes")
     inv = [1 / leg.odds for leg in legs]
     total_inv = sum(inv)
-    stakes = [total_stake * i / total_inv for i in inv]
-    if round_to > 0:
-        stakes = [round(s / round_to) * round_to for s in stakes]
-    else:
-        stakes = [round(s, 2) for s in stakes]
+    exact = [total_stake * i / total_inv for i in inv]
+    if round_to <= 0:
+        return _plan(legs, [round(s, 2) for s in exact])
+    # Try rounding each stake down or up; keep the combo with the best worst-case
+    # return on stake (2^n combos, n is 2-3 in practice).
+    best: StakePlan | None = None
+    for mask in range(1 << len(legs)):
+        stakes = [(math.ceil(s / round_to) if mask >> i & 1 else math.floor(s / round_to)) * round_to
+                  for i, s in enumerate(exact)]
+        if min(stakes) <= 0:
+            continue
+        cand = _plan(legs, stakes)
+        if best is None or cand.roi > best.roi + 1e-12:
+            best = cand
+    return best or _plan(legs, [round(s, 2) for s in exact])
+
+
+def _plan(legs: list[Leg], stakes: list[float]) -> StakePlan:
+    stakes = [round(s, 2) for s in stakes]
     payouts = [round(s * leg.odds, 2) for s, leg in zip(stakes, legs)]
     return StakePlan(legs=legs, stakes=stakes, total_stake=round(sum(stakes), 2), payouts=payouts)

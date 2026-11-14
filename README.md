@@ -26,7 +26,11 @@ Example: Team A at **2.10** (Book X), Team B at **2.05** (Book Y).
 python -m arb calc 2.10 2.05 --stake 100
 python -m arb calc +110 -105 2/1 --stake 250 --round 1    # 3-way market
 
-# 2. Scan live odds from 40+ bookmakers automatically
+# 2. Recommended: auto mode. Checks every in-season sport for free, then spends
+#    the credit budget on the sports/markets with the most upcoming games.
+python -m arb scan --auto --budget 15 --markets h2h,totals,spreads --round 1
+
+# Or pick sports yourself
 export ODDS_API_KEY=your_key        # free tier at https://the-odds-api.com (500 requests/month)
 python -m arb sports                                   # list sport keys
 python -m arb scan --stake 100                         # all upcoming games, h2h markets
@@ -39,7 +43,13 @@ python -m arb scan --watch 300                         # rescan every 5 min (use
 python -m unittest discover -s tests
 ```
 
-Each request costs `markets × regions` API credits, so keep `--watch` intervals long on the free tier.
+**API quota (free tier = 500 credits/month).** Listing sports and events is free; odds cost
+`markets × regions` credits per sport. Defaults are tuned for an Australian user:
+
+* `--regions au` only. Australians can generally only use AU-licensed bookmakers, and each extra
+  region multiplies the cost. Add `uk,eu,us` only if you can actually bet there.
+* `--auto --budget 15` once a day = ~450 credits/month, with headroom.
+* `--round 1` tries rounding each stake up or down and keeps the most profitable whole-dollar split.
 
 ## Read this before betting real money
 
