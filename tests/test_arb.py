@@ -106,6 +106,15 @@ class TestScanner(unittest.TestCase):
         [opp] = find_opportunities([ev])            # no limit -> arb shown, with ages
         self.assertAlmostEqual(max(l.age_min for l in opp.legs), 45, delta=0.1)
 
+    def test_only_books_filter(self):
+        ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [
+            book("b1", [{"name": "H", "price": 2.15}, {"name": "A", "price": 1.80}]),
+            book("b2", [{"name": "H", "price": 1.85}, {"name": "A", "price": 2.10}]),
+            book("b3", [{"name": "H", "price": 1.90}, {"name": "A", "price": 1.90}]),
+        ]}
+        self.assertEqual(len(find_opportunities([ev], only_books={"b1", "b2"})), 1)
+        self.assertEqual(find_opportunities([ev], only_books={"b1", "b3"}), [])
+
     def test_skips_started_games(self):
         ev = {"home_team": "H", "away_team": "A", "commence_time": "2000-01-01T00:00:00Z", "bookmakers": [
             book("b1", [{"name": "H", "price": 3.0}, {"name": "A", "price": 3.0}]),

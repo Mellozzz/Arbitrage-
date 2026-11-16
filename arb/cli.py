@@ -81,7 +81,8 @@ def scan_once(args: argparse.Namespace) -> int:
             print(f"[{sport}] error: {e}", file=sys.stderr)
             continue
         opps = find_opportunities(events, min_margin=args.min_margin / 100, exclude_books=exclude,
-                                  commission=commission, max_age_min=args.max_age or None)
+                                  commission=commission, max_age_min=args.max_age or None,
+                                  only_books=set(filter(None, args.books.split(","))) or None)
         print(f"[{sport} {markets}] {len(events)} events scanned, {len(opps)} arbs "
               f"(API quota remaining: {quota.get('remaining')})")
         for o in opps:
@@ -153,6 +154,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--budget", type=int, default=15, help="max API credits to spend with --auto")
     s.add_argument("--hours", type=float, default=48, help="with --auto, count games starting within N hours")
     s.add_argument("--min-margin", type=float, default=0.5, help="minimum profit %% to show")
+    s.add_argument("--books", default="",
+                   help="only use these bookmaker keys (the ones you have accounts with), "
+                        "e.g. tab,pointsbetau,sportsbet,ladbrokes_au,unibet")
     s.add_argument("--exclude", default="", help="comma list of bookmaker keys to ignore")
     s.add_argument("--watch", type=int, default=0, help="rescan every N seconds (uses API quota!)")
     common(s)

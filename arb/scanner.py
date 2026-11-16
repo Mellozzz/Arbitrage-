@@ -51,6 +51,7 @@ def find_opportunities(
     exclude_books: set[str] | None = None,
     commission: dict[str, float] | None = None,
     max_age_min: float | None = None,
+    only_books: set[str] | None = None,
 ) -> list[Opportunity]:
     """events: The Odds API v4 /odds response format.
 
@@ -78,7 +79,7 @@ def find_opportunities(
         n_outcomes: dict[tuple[str, float | None], int] = {}
 
         for book in ev.get("bookmakers", []):
-            if book["key"] in exclude_books:
+            if book["key"] in exclude_books or (only_books and book["key"] not in only_books):
                 continue
             for mkt in book.get("markets", []):
                 key_name = mkt["key"]

@@ -49,6 +49,7 @@ python -m unittest discover -s tests
 * `--regions au` only. Australians can generally only use AU-licensed bookmakers, and each extra
   region multiplies the cost. Add `uk,eu,us` only if you can actually bet there.
 * `--auto --budget 15` once a day = ~450 credits/month, with headroom.
+* `--books tab,pointsbetau,sportsbet,ladbrokes_au,unibet` limits results to bookmakers you have accounts with.
 * `--max-age 10` (the scan default) ignores prices the bookmaker hasn't updated in the last 10 minutes
   and shows each price's age. This costs no extra credits. Stale prices are the main cause of fake arbs.
 * `--round 1` tries rounding each stake up or down and keeps the most profitable whole-dollar split.
