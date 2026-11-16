@@ -35,16 +35,29 @@ def _line_key(market: str, outcome: dict, home_team: str) -> float | None:
     return point  # totals: Over 2.5 pairs with Under 2.5
 
 
+def _age_minutes(stamp: str | None, now: datetime) -> float | None:
+    if not stamp:
+        return None
+    try:
+        t = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return max(0.0, (now - t).total_seconds() / 60)
+
+
 def find_opportunities(
     events: list[dict],
     min_margin: float = 0.0,
     exclude_books: set[str] | None = None,
     commission: dict[str, float] | None = None,
+    max_age_min: float | None = None,
 ) -> list[Opportunity]:
     """events: The Odds API v4 /odds response format.
 
     commission: bookmaker key -> rate on winnings (defaults to DEFAULT_COMMISSION).
     Exchange prices are compared net of commission, so only real profits show.
+    max_age_min: ignore prices last updated more than this many minutes ago
+    (stale prices are the main cause of arbs that don't exist on the book's site).
     """
     exclude_books = exclude_books or set()
     commission = DEFAULT_COMMISSION if commission is None else commission
@@ -71,6 +84,9 @@ def find_opportunities(
                 key_name = mkt["key"]
                 if key_name.endswith("_lay"):
                     continue  # exchange lay prices are bets AGAINST an outcome, not backable odds
+                age = _age_minutes(mkt.get("last_update") or book.get("last_update"), now)
+                if max_age_min is not None and age is not None and age > max_age_min:
+                    continue  # stale price
                 per_line: dict[float | None, int] = {}
                 for out in mkt.get("outcomes", []):
                     price = out.get("price")
@@ -85,7 +101,7 @@ def find_opportunities(
                     eff = net_odds(float(price), rate)
                     if cur is None or eff > cur.odds:
                         slot[out["name"]] = Leg(out["name"], eff, book.get("title", book["key"]),
-                                                quoted=float(price) if rate else None)
+                                                quoted=float(price) if rate else None, age_min=age)
                 for line, n in per_line.items():
                     k = (key_name, line)
                     n_outcomes[k] = max(n_outcomes.get(k, 0), n)

@@ -35,6 +35,7 @@ class Leg:
     odds: float          # decimal odds actually paid (after any commission)
     bookmaker: str = ""
     quoted: float | None = None  # price shown by the book, if different from `odds`
+    age_min: float | None = None  # minutes since the bookmaker last updated this price
 
 
 @dataclass

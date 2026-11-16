@@ -22,7 +22,8 @@ def print_plan(legs: list[Leg], stake: float, round_to: float) -> None:
     for leg, s, p in zip(plan.legs, plan.stakes, plan.payouts):
         book = f" @ {leg.bookmaker}" if leg.bookmaker else ""
         price = f"{leg.quoted:.2f} (net {leg.odds:.2f})" if leg.quoted else f"{leg.odds:.2f}"
-        print(f"    {leg.outcome:<28} odds {price:>16}{book:<22} stake {s:>9.2f}  -> returns {p:>9.2f}")
+        age = f"  (updated {leg.age_min:.0f} min ago)" if leg.age_min is not None else ""
+        print(f"    {leg.outcome:<28} odds {price:>16}{book:<22} stake {s:>9.2f}  -> returns {p:>9.2f}{age}")
     print(f"    total staked {plan.total_stake:.2f} | guaranteed profit {plan.min_profit:+.2f} "
           f"({plan.roi:+.2%})" + (f" up to {plan.max_profit:+.2f}" if plan.max_profit - plan.min_profit > 0.01 else ""))
     if plan.min_profit <= 0:
@@ -80,7 +81,7 @@ def scan_once(args: argparse.Namespace) -> int:
             print(f"[{sport}] error: {e}", file=sys.stderr)
             continue
         opps = find_opportunities(events, min_margin=args.min_margin / 100, exclude_books=exclude,
-                                  commission=commission)
+                                  commission=commission, max_age_min=args.max_age or None)
         print(f"[{sport} {markets}] {len(events)} events scanned, {len(opps)} arbs "
               f"(API quota remaining: {quota.get('remaining')})")
         for o in opps:
@@ -114,7 +115,7 @@ def cmd_file(args: argparse.Namespace) -> int:
     with open(args.path) as f:
         events = json.load(f)
     opps = find_opportunities(events, min_margin=args.min_margin / 100,
-                              commission=parse_commission(args.commission))
+                              commission=parse_commission(args.commission), max_age_min=args.max_age or None)
     for o in opps:
         line = f" {o.line:+g}" if o.line is not None else ""
         print(f"\n  {o.margin:+.2%}  {o.event} | {o.market}{line}")
@@ -132,6 +133,8 @@ def main(argv: list[str] | None = None) -> int:
         sp.add_argument("--round", type=float, default=0, help="round stakes to this increment, e.g. 1 or 5")
 
     def commission_arg(sp: argparse.ArgumentParser) -> None:
+        sp.add_argument("--max-age", type=float, default=sp.get_default("max_age") or 0,
+                        help="ignore prices not updated in the last N minutes (0 = no limit)")
         sp.add_argument("--commission", default="",
                         help="override exchange commission, e.g. betfair_ex_au=6,smarkets=2 "
                              "(defaults: Betfair 5%%, Smarkets/Matchbook 2%%)")
@@ -153,6 +156,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--exclude", default="", help="comma list of bookmaker keys to ignore")
     s.add_argument("--watch", type=int, default=0, help="rescan every N seconds (uses API quota!)")
     common(s)
+    s.set_defaults(max_age=10)
     commission_arg(s)
     s.set_defaults(func=cmd_scan)
 

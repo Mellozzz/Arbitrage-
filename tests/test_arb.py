@@ -93,6 +93,19 @@ class TestScanner(unittest.TestCase):
         self.assertAlmostEqual(leg.odds, 1 + 1.30 * 0.98)
         self.assertEqual(leg.quoted, 2.30)
 
+    def test_stale_prices_ignored(self):
+        from datetime import datetime, timedelta, timezone
+        now = datetime.now(timezone.utc)
+        fresh = (now - timedelta(minutes=1)).isoformat()
+        stale = (now - timedelta(minutes=45)).isoformat()
+        b1 = book("b1", [{"name": "H", "price": 2.15}, {"name": "A", "price": 1.80}])
+        b2 = book("b2", [{"name": "H", "price": 1.85}, {"name": "A", "price": 2.10}])
+        b1["last_update"], b2["last_update"] = fresh, stale
+        ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [b1, b2]}
+        self.assertEqual(find_opportunities([ev], max_age_min=10), [])
+        [opp] = find_opportunities([ev])            # no limit -> arb shown, with ages
+        self.assertAlmostEqual(max(l.age_min for l in opp.legs), 45, delta=0.1)
+
     def test_skips_started_games(self):
         ev = {"home_team": "H", "away_team": "A", "commence_time": "2000-01-01T00:00:00Z", "bookmakers": [
             book("b1", [{"name": "H", "price": 3.0}, {"name": "A", "price": 3.0}]),
