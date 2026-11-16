@@ -110,7 +110,7 @@ class TestScanner(unittest.TestCase):
         ev = {"home_team": "H", "away_team": "A", "commence_time": FUTURE, "bookmakers": [
             book("b1", [{"name": "H", "price": 2.15}, {"name": "A", "price": 1.80}]),
             book("b2", [{"name": "H", "price": 1.85}, {"name": "A", "price": 2.10}]),
-            book("b3", [{"name": "H", "price": 1.90}, {"name": "A", "price": 1.90}]),
+            book("b3", [{"name": "H", "price": 1.80}, {"name": "A", "price": 1.80}]),
         ]}
         self.assertEqual(len(find_opportunities([ev], only_books={"b1", "b2"})), 1)
         self.assertEqual(find_opportunities([ev], only_books={"b1", "b3"}), [])
